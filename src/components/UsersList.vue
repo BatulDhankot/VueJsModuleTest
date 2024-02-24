@@ -17,6 +17,8 @@ const getIndex = ref(0)
 const isDeleteDialogVisible = ref(false)
 const searchTerm = ref('');
 const users = ref([]);
+const currentPage = ref(1);
+const itemsPerPage = 5;
 
 // get Data from local Storage
 onMounted(() => {
@@ -85,7 +87,7 @@ const deleteUser = () => {
     isDeleteDialogVisible.value = !isDeleteDialogVisible.value;
 }
 
-
+//  👉  edit User
 const editUser = (index: number) => {
   usersInfo.name = users.value[index].name;
   usersInfo.email = users.value[index].email;
@@ -94,11 +96,33 @@ const editUser = (index: number) => {
   modalActive.value = true;
 };
 
-const filteredUsers = computed(() => {
-      return users.value.filter((user:any) =>
-      user.name.toLowerCase().includes(searchTerm.value.toLowerCase())
-      );
-    });
+// Function to change the current page
+const changePage = (page:number) => {
+  if (page >= 1 && page <= Math.ceil(users.value.length / itemsPerPage)) {
+    currentPage.value = page;
+  }
+};
+
+// Computed property for total pages
+const totalPages = computed(() => {
+  const filteredUsers = users.value.filter((user: any) =>
+    user.name.toLowerCase().includes(searchTerm.value.toLowerCase())
+  );
+  return Math.ceil(filteredUsers.length / itemsPerPage);
+});
+
+// Computed property for filtered and paginated users
+const filteredAndPaginatedUsers = computed(() => {
+  const filteredUsers = users.value.filter((user: any) =>
+    user.name.toLowerCase().includes(searchTerm.value.toLowerCase())
+  );
+
+  const startIndex = (currentPage.value - 1) * itemsPerPage;
+  const endIndex = startIndex + itemsPerPage;
+  const slicedUsers = filteredUsers.slice(startIndex, endIndex);
+
+  return slicedUsers;
+});
 </script>
 
 <template>
@@ -126,35 +150,58 @@ const filteredUsers = computed(() => {
     </div>
 
  <!-- 👉 Listing Table -->
-    <table class="min-w-full border border-gray-300">
+ <table class="min-w-full border border-gray-300">
       <thead>
         <tr>
-          <th  v-for="(column, index) in headers"
-                :id="column.name"
-                :key="index" scope="col" class="px-6 py-3">
-                 {{ column.name }}
-                </th>
+          <th
+            v-for="(column, index) in headers"
+            :id="column.name"
+            :key="index"
+            scope="col"
+            class="px-6 py-3"
+          >
+            {{ column.name }}
+          </th>
         </tr>
       </thead>
       <tbody>
-        <tr v-for="(user, index) in filteredUsers" :key="index">
+        <!-- Use filteredAndPaginatedUsers instead of filteredUsers -->
+        <tr v-for="(user, index) in filteredAndPaginatedUsers" :key="index">
           <td class="border p-2">{{ user.name }}</td>
           <td class="border p-2">{{ user.email }}</td>
           <td class="border p-2">{{ user.mobile }}</td>
           <td class="border p-2">{{ user.dob }}</td>
           <td class="border p-2">
-            <button type="button" class="text-white bg-blue-500 hover:bg-blue-700  font-medium 
-                     text-sm px-5 me-2  dark:bg-blue-600 dark:hover:bg-blue-700 focus:outline-none" @click="editUser(index)">
-                    Edit 
-                   </button>
-                   <button type="button" class="text-white bg-blue-500 hover:bg-blue-700  font-medium 
-                    text-sm px-5 me-2 mb-1 dark:bg-blue-600 dark:hover:bg-blue-700 focus:outline-none" @click="deleteDialog(index)">
-                    Delete 
-                   </button>
+            <button
+              type="button"
+              class="text-white bg-blue-500 hover:bg-blue-700  font-medium text-sm px-5 me-2  dark:bg-blue-600 dark:hover:bg-blue-700 focus:outline-none"
+              @click="editUser(index)"
+            >
+              Edit
+            </button>
+            <button
+              type="button"
+              class="text-white bg-blue-500 hover:bg-blue-700  font-medium text-sm px-5 me-2 mb-1 dark:bg-blue-600 dark:hover:bg-blue-700 focus:outline-none"
+              @click="deleteDialog(index)"
+            >
+              Delete
+            </button>
           </td>
         </tr>
       </tbody>
     </table>
+
+    <!-- Add Pagination -->
+    <div class="mt-4 flex justify-end">
+      <button
+        v-for="pageNumber in totalPages"
+        :key="pageNumber"
+        @click="changePage(pageNumber)"
+        class="px-3 py-1 mx-1 bg-blue-500 text-white rounded-full hover:bg-blue-700"
+      >
+        {{ pageNumber }}
+      </button>
+    </div>
 </div>
 
 <!-- 👉 Add user Popup Modal -->
