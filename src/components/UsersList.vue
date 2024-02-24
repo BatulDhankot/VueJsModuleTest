@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref,reactive,computed } from 'vue'
+import { ref,reactive,computed,onMounted } from 'vue'
 import AddModal from './AddModal.vue'
 import DeleteConfirmationDialog from './DeleteConfirmationDialog.vue'
 
@@ -15,12 +15,17 @@ const headers = [
 const modalActive = ref(false)
 const getIndex = ref(0)
 const isDeleteDialogVisible = ref(false)
+const searchTerm = ref('');
+const users = ref([]);
 
-// reactive data for add data in table
-let usersData:any = reactive({
-  data: []
-})
-const searchData = ref('')
+// get Data from local Storage
+onMounted(() => {
+      const storedUsers = localStorage.getItem('users');
+      if (storedUsers) {
+        users.value = JSON.parse(storedUsers);
+      }
+    });
+
 
 // form reactive Data
 const usersInfo = reactive({
@@ -30,15 +35,6 @@ mobile: '',
 dob: ''
 })
 
-// Check if the email already exists in form
-const isUniqueEmail = computed(() => {
-  if (!usersInfo.email) {
-    return true;
-  }
-  const existingEmail = usersData.data.some((user) => user.email === usersInfo.email);
-
-  return !existingEmail;
-});
 
 //  👉 popup modal
 const toggleModal = () => {
@@ -55,46 +51,54 @@ const resetUsersData = reactive({ ...usersInfo })
 
 //  👉 save User
 const onSave = () => {
-    usersData.data.push({...usersInfo})
-    toggleModal()
-    reset(usersInfo, resetUsersData)  // reset Form data after add
-}
+  if (!usersInfo.name || !usersInfo.email || !usersInfo.mobile || !usersInfo.dob) {
+        alert('Please fill in all fields.');
+        return;
+      }
 
-//  👉  Search User
-const searchFunction = computed(() => {
-  const searchText = searchData.value.toLowerCase().trim();
+  // Check if the user being edited already exists in the list
+  const existingUser = users.value.find((user) => user.email === usersInfo.email);
 
-  if (searchText.length >= 3) {
-    const filteredData = usersData.data.filter((user:any) => {
-      const nameMatch = user.name.toLowerCase().includes(searchText);
-      const emailMatch = user.email.toLowerCase().includes(searchText);
-      const mobileMatch = user.mobile.toLowerCase().includes(searchText);
-
-      return nameMatch || emailMatch || mobileMatch;
-    });
-
-    return filteredData;
+  if (existingUser) {
+    // Editing existing user
+    Object.assign(existingUser, { ...usersInfo });
+  } else {
+    // Adding new user
+    users.value.push({ ...usersInfo });
   }
-  return usersData.value; // Return original data if search text length is less than 3
-});
 
+  localStorage.setItem('users', JSON.stringify(users.value));
+  toggleModal();
+  reset(usersInfo, resetUsersData); // reset Form data after add
+};
+
+
+//  👉  Delete Dialog
 const deleteDialog = (index: number) => { 
   getIndex.value =  index
  isDeleteDialogVisible.value = !isDeleteDialogVisible.value;
 };
 
 //  👉  Delete User
-const deleteUser = () => {
-    usersData.data.splice(getIndex.value);
+const deleteUser = () => { 
+  users.value.splice(getIndex.value);
     isDeleteDialogVisible.value = !isDeleteDialogVisible.value;
 }
 
-// Debounce the search function to trigger after a certain delay
-const onSearchInputChange = () => {
-      setTimeout(() => {
-        searchFunction;
-      }, 500); // delay time in milliseconds
-    };
+
+const editUser = (index: number) => {
+  usersInfo.name = users.value[index].name;
+  usersInfo.email = users.value[index].email;
+  usersInfo.mobile = users.value[index].mobile;
+  usersInfo.dob = users.value[index].dob;
+  modalActive.value = true;
+};
+
+const filteredUsers = computed(() => {
+      return users.value.filter((user:any) =>
+      user.name.toLowerCase().includes(searchTerm.value.toLowerCase())
+      );
+    });
 </script>
 
 <template>
@@ -107,9 +111,9 @@ const onSearchInputChange = () => {
                     <path stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="m19 19-4-4m0-7A7 7 0 1 1 1 8a7 7 0 0 1 14 0Z"/>
                 </svg>
             </div>
-            <input  v-model="searchData" type="text" id="table-search-users" class="block p-2 ps-10 text-sm text-gray-900 border border-gray-300 rounded-lg 
+            <input  v-model="searchTerm" type="text" id="table-search-users" class="block p-2 ps-10 text-sm text-gray-900 border border-gray-300 rounded-lg 
             w-80 bg-gray-50 focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:border-gray-600 dark:placeholder-gray-400
-             dark:text-white dark:focus:ring-blue-500 dark:focus:border-blue-500" placeholder="Search by name, email, or mobile" @input="onSearchInputChange">
+             dark:text-white dark:focus:ring-blue-500 dark:focus:border-blue-500" placeholder="Search by name">
         </div>
         <div>
           <!-- 👉   Add New Users -->
@@ -121,82 +125,35 @@ const onSearchInputChange = () => {
         </div>
     </div>
 
-    <!-- 👉 Listing Table -->
-    <table class="w-full text-sm text-left rtl:text-right text-gray-500 dark:text-gray-400">
-      <!-- 👉 Heading of table -->
-        <thead class="text-xs text-gray-700 uppercase bg-gray-50 dark:bg-gray-700 dark:text-gray-400">
-            <tr>
-                <th  v-for="(column, index) in headers"
+ <!-- 👉 Listing Table -->
+    <table class="min-w-full border border-gray-300">
+      <thead>
+        <tr>
+          <th  v-for="(column, index) in headers"
                 :id="column.name"
                 :key="index" scope="col" class="px-6 py-3">
                  {{ column.name }}
                 </th>
-            </tr>
-        </thead>
-        <tbody>
-     <!-- 👉 search data table -->
-      <template v-if="searchFunction">
-            <tr v-for="(user, index) in  searchFunction"  :key="index" class="bg-white border-b dark:bg-gray-800 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-600">
-                <td class=" items-center px-6 py-4 text-gray-800 whitespace-nowrap dark:text-white">
-                        <div class="text-base font-semibold">{{ user.name }}</div>  
-                </td>
-
-                <td  class=" items-center px-6 py-4 text-gray-800 whitespace-nowrap dark:text-white">
-                        <div class="text-base font-semibold">{{ user.email }}</div>    
-                </td>
-
-                <td  class=" items-center px-6 py-4 text-gray-800 whitespace-nowrap dark:text-white">
-                        <div class="text-base font-semibold">{{ user.mobile }}</div> 
-                </td>
-
-                <td  class=" items-center px-6 py-4 text-gray-800 whitespace-nowrap dark:text-white">
-                        <div class="text-base font-semibold">{{ user.dob }}</div>
-                </td>
-                <td class="px-6 py-4">
-                    <button type="button" class="text-white bg-blue-500 hover:bg-blue-700  font-medium 
-                     text-sm px-5 me-2  dark:bg-blue-600 dark:hover:bg-blue-700 focus:outline-none">
+        </tr>
+      </thead>
+      <tbody>
+        <tr v-for="(user, index) in filteredUsers" :key="index">
+          <td class="border p-2">{{ user.name }}</td>
+          <td class="border p-2">{{ user.email }}</td>
+          <td class="border p-2">{{ user.mobile }}</td>
+          <td class="border p-2">{{ user.dob }}</td>
+          <td class="border p-2">
+            <button type="button" class="text-white bg-blue-500 hover:bg-blue-700  font-medium 
+                     text-sm px-5 me-2  dark:bg-blue-600 dark:hover:bg-blue-700 focus:outline-none" @click="editUser(index)">
                     Edit 
                    </button>
                    <button type="button" class="text-white bg-blue-500 hover:bg-blue-700  font-medium 
                     text-sm px-5 me-2 mb-1 dark:bg-blue-600 dark:hover:bg-blue-700 focus:outline-none" @click="deleteDialog(index)">
                     Delete 
                    </button>
-                  </td>
-            </tr>
-          </template>
-
-    <!-- 👉 List Data table -->
-          <template v-else>
-          <tr v-for="(list, index) in usersData.data"  :key="index" class="bg-white border-b dark:bg-gray-800 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-600">
-                <td class=" items-center px-6 py-4 text-gray-800 whitespace-nowrap dark:text-white">
-                        <div class="text-base font-semibold">{{ list.name }}</div>  
-                </td>
-
-                <td  class=" items-center px-6 py-4 text-gray-800 whitespace-nowrap dark:text-white">
-                        <div class="text-base font-semibold">{{ list.email }}</div>    
-                </td>
-
-                <td  class=" items-center px-6 py-4 text-gray-800 whitespace-nowrap dark:text-white">
-                        <div class="text-base font-semibold">{{ list.mobile }}</div> 
-                </td>
-
-                <td  class=" items-center px-6 py-4 text-gray-800 whitespace-nowrap dark:text-white">
-                        <div class="text-base font-semibold">{{ list.dob }}</div>
-                </td>
-                <td class="px-6 py-4">
-                    <button type="button" class="text-white bg-blue-500 hover:bg-blue-700  font-medium 
-                     text-sm px-5 me-2  dark:bg-blue-600 dark:hover:bg-blue-700 focus:outline-none">
-                    Edit 
-                   </button>
-                   <button type="button" class="text-white bg-blue-500 hover:bg-blue-700  font-medium 
-                    text-sm px-5 me-2 mb-1 dark:bg-blue-600 dark:hover:bg-blue-700 focus:outline-none" @click="deleteDialog(index)">
-                    Delete 
-                   </button>
-                  </td>
-            </tr>
-          </template>
-        
-        </tbody>
+          </td>
+        </tr>
+      </tbody>
     </table>
 </div>
 
@@ -204,33 +161,35 @@ const onSearchInputChange = () => {
 <AddModal v-if="modalActive" :modalActive="modalActive">  
   <!-- 👉 Form start -->
       <form @submit.prevent="onSave">
-        <h3 class="text-3xl font-bold">ADD</h3>
+        <h2 class="text-xl font-semibold mb-4">{{ usersInfo.name ? 'Edit User' : 'Create User' }}</h2>
         <div class="mt-5">
             <div>
             <label class="flex justify-start">Name</label>
             <input v-model="usersInfo.name"
+            id="name"
               class="shadow appearance-none border rounded  w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline"
               type="text">
               <p v-if="!usersInfo.name.length" class="mt-2 text-sm text-red-600 dark:text-red-500 flex justify-start">name is required!</p>
           </div>
           <div>
             <label class="flex justify-start mt-3">Email</label>
-            <input v-model="usersInfo.email"
+            <input v-model="usersInfo.email" 
+            id="email"
               class="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline"
               type="text">
               <p v-if="!usersInfo.email.length" class="mt-2 text-sm text-red-600 dark:text-red-500 flex justify-start">email is required!</p>
-              <p v-if="!isUniqueEmail" class="mt-2 text-sm text-red-600 dark:text-red-500 flex justify-start">email should be unique!</p>
+             
           </div>
           <div>
             <label class="flex justify-start mt-3">Mobile</label>
-            <input v-model="usersInfo.mobile"
+            <input v-model="usersInfo.mobile" id="mobile-number"
               class="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline"
               type="text" >
               <p v-if="!usersInfo.mobile.length" class="mt-2 text-sm text-red-600 dark:text-red-500 flex justify-start">mobile is required!</p>
           </div>
           <div>
             <label class="flex justify-start mt-3">Date of Birth</label>
-            <input v-model="usersInfo.dob"
+            <input v-model="usersInfo.dob" id="date-of-birth"
               class="shadow appearance-none border rounded  w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline"
               type="text">
               <p v-if="!usersInfo.dob.length" class="mt-2 text-sm text-red-600 dark:text-red-500 flex justify-start">dob is required!</p>
